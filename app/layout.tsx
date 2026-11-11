@@ -4,27 +4,32 @@ import './globals.css'
 export const metadata: Metadata = {
   metadataBase: new URL('https://cari-foto.vercel.app'),
   title: {
-    default: 'Cari Foto Ciwidey | Hunting Foto & Session Photo Ciwidey',
+    default: 'Cari Foto Ciwidey | Sunmori Ciwidey | Hunting Foto & Session Photo',
     template: '%s | Cari Foto Ciwidey',
   },
   description:
-    'Cari foto Ciwidey untuk hunting foto, session photo, wisata, keluarga, dan momen spesial di Ciwidey. Temukan foto dan booking sesi foto mudah di CariFoto.',
+    'Cari foto Ciwidey, sunmori Ciwidey, hunting foto Ciwidey, dan session photo di Ciwidey. Temukan lokasi foto, momen wisata, dan booking sesi foto di CariFoto.',
   keywords: [
     'cari foto ciwidey',
     'foto ciwidey',
+    'sunmori ciwidey',
     'hunting foto ciwidey',
     'session foto ciwidey',
     'jasa foto ciwidey',
     'fotografer ciwidey',
+    'sunmori foto ciwidey',
+    'tempat foto ciwidey',
+    'wisata foto ciwidey',
     'cari foto',
-    'jasa hunting foto',
+    'hunting foto',
+    'session photo',
+    'foto wisata',
     'foto event',
-    'session foto',
   ],
   openGraph: {
-    title: 'Cari Foto Ciwidey | Hunting Foto & Session Photo Ciwidey',
+    title: 'Cari Foto Ciwidey | Sunmori Ciwidey | Hunting Foto & Session Photo',
     description:
-      'Temukan sesi hunting foto, foto wisata, dan momen penting di Ciwidey hanya di CariFoto.',
+      'Cari foto Ciwidey, sunmori Ciwidey, dan session photo yang cocok untuk momen wisata, keluarga, serta aktivitas outdoor di Ciwidey.',
     url: 'https://cari-foto.vercel.app',
     siteName: 'CariFoto',
     locale: 'id_ID',
@@ -32,9 +37,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cari Foto Ciwidey | Hunting Foto & Session Photo Ciwidey',
+    title: 'Cari Foto Ciwidey | Sunmori Ciwidey | Hunting Foto & Session Photo',
     description:
-      'Temukan sesi hunting foto, foto wisata, dan momen penting di Ciwidey hanya di CariFoto.',
+      'Cari foto Ciwidey, sunmori Ciwidey, dan session photo yang cocok untuk momen wisata, keluarga, serta aktivitas outdoor di Ciwidey.',
   },
   alternates: {
     canonical: '/',
