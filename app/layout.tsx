@@ -4,23 +4,27 @@ import './globals.css'
 export const metadata: Metadata = {
   metadataBase: new URL('https://cari-foto.vercel.app'),
   title: {
-    default: 'CariFoto | Jasa Hunting Foto & Session Photo',
-    template: '%s | CariFoto',
+    default: 'Cari Foto Ciwidey | Hunting Foto & Session Photo Ciwidey',
+    template: '%s | Cari Foto Ciwidey',
   },
   description:
-    'CariFoto membantu kamu menemukan sesi hunting foto, foto event, dan momen penting dengan mudah dan cepat.',
+    'Cari foto Ciwidey untuk hunting foto, session photo, wisata, keluarga, dan momen spesial di Ciwidey. Temukan foto dan booking sesi foto mudah di CariFoto.',
   keywords: [
+    'cari foto ciwidey',
+    'foto ciwidey',
+    'hunting foto ciwidey',
+    'session foto ciwidey',
+    'jasa foto ciwidey',
+    'fotografer ciwidey',
     'cari foto',
     'jasa hunting foto',
     'foto event',
     'session foto',
-    'fotografer jakarta',
-    'cari foto hunting',
   ],
   openGraph: {
-    title: 'CariFoto | Jasa Hunting Foto & Session Photo',
+    title: 'Cari Foto Ciwidey | Hunting Foto & Session Photo Ciwidey',
     description:
-      'Temukan sesi hunting foto, foto event, dan momen penting hanya di CariFoto.',
+      'Temukan sesi hunting foto, foto wisata, dan momen penting di Ciwidey hanya di CariFoto.',
     url: 'https://cari-foto.vercel.app',
     siteName: 'CariFoto',
     locale: 'id_ID',
@@ -28,9 +32,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'CariFoto | Jasa Hunting Foto & Session Photo',
+    title: 'Cari Foto Ciwidey | Hunting Foto & Session Photo Ciwidey',
     description:
-      'Temukan sesi hunting foto, foto event, dan momen penting hanya di CariFoto.',
+      'Temukan sesi hunting foto, foto wisata, dan momen penting di Ciwidey hanya di CariFoto.',
   },
   alternates: {
     canonical: '/',
