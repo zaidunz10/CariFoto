@@ -2,8 +2,39 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'CariFoto Rider - Temukan Momen Berkendaramu',
-  description: 'Cari & Beli Foto Jepretan Jalananmu secara Instan',
+  metadataBase: new URL('https://cari-foto.vercel.app'),
+  title: {
+    default: 'CariFoto | Jasa Hunting Foto & Session Photo',
+    template: '%s | CariFoto',
+  },
+  description:
+    'CariFoto membantu kamu menemukan sesi hunting foto, foto event, dan momen penting dengan mudah dan cepat.',
+  keywords: [
+    'cari foto',
+    'jasa hunting foto',
+    'foto event',
+    'session foto',
+    'fotografer jakarta',
+    'cari foto hunting',
+  ],
+  openGraph: {
+    title: 'CariFoto | Jasa Hunting Foto & Session Photo',
+    description:
+      'Temukan sesi hunting foto, foto event, dan momen penting hanya di CariFoto.',
+    url: 'https://cari-foto.vercel.app',
+    siteName: 'CariFoto',
+    locale: 'id_ID',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'CariFoto | Jasa Hunting Foto & Session Photo',
+    description:
+      'Temukan sesi hunting foto, foto event, dan momen penting hanya di CariFoto.',
+  },
+  alternates: {
+    canonical: '/',
+  },
 }
 
 export default function RootLayout({
