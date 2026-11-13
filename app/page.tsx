@@ -255,6 +255,7 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {visibleSessions.map((session) => {
                   const rawIg = session.instagram_link?.replace("@", "").trim();
+                  const topLabel = rawIg || "zdnsyh10@gmail.com";
                   const rawWa = session.whatsapp_number
                     ?.replace("+", "")
                     .replace(/\s+/g, "");
@@ -267,6 +268,9 @@ export default function Home() {
                       <div className="flex items-center gap-3.5">
                         <span className="text-3xl">📁</span>
                         <div>
+                          <div className="text-[11px] sm:text-xs font-bold text-[#7B4FE0] mb-1">
+                            {topLabel}
+                          </div>
                           <h3 className="text-sm sm:text-base font-bold text-white">
                             {session.location}
                           </h3>
