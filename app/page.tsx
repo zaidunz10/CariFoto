@@ -294,6 +294,26 @@ export default function Home() {
                                     photos: [],
                                   }),
                                 )}`}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  const confirmed = window.confirm(
+                                    "Yakin ingin lanjut ke WhatsApp fotografer?",
+                                  );
+                                  if (!confirmed) return;
+
+                                  window.open(
+                                    `https://wa.me/${normalizeWhatsAppNumber(rawWa)}?text=${encodeURIComponent(
+                                      buildWhatsAppMessage({
+                                        sessionLocation: session.location,
+                                        sessionDate: session.session_date,
+                                        instagramLink: session.instagram_link,
+                                        photos: [],
+                                      }),
+                                    )}`,
+                                    "_blank",
+                                    "noopener,noreferrer",
+                                  );
+                                }}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1.5 text-[#25D366] hover:underline"

@@ -300,6 +300,12 @@ async function downloadSinglePhoto(photo: DriveItem) {
     });
 
     const url = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+    const confirmed = window.confirm("Yakin ingin lanjut ke WhatsApp fotografer?");
+    if (!confirmed) {
+      setWhatsappSending(false);
+      return;
+    }
+
     window.open(url, "_blank", "noopener,noreferrer");
 
     window.setTimeout(() => {
