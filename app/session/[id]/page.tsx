@@ -1,11 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { Suspense, useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { buildWhatsAppMessage, normalizeWhatsAppNumber } from "@/lib/whatsapp";
-import WhatsAppIcon from "../../../img/whatsapp.png";
 
 interface DriveItem {
   id: string;
@@ -24,6 +22,11 @@ interface Session {
   price_single?: number;
   drive_folder_id?: string;
 }
+
+type AuthUser = {
+  id: string;
+  email?: string | null;
+};
 
 const DRIVE_API_KEY =
   process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY ||
@@ -62,9 +65,9 @@ function SessionDetailContent() {
     { id: string; name: string }[]
   >([]);
 
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [gridColumns, setGridColumns] = useState<number>(2);
+  const gridColumns = 2;
   const [selectedPhoto, setSelectedPhoto] = useState<DriveItem | null>(null);
   const [multiSelectMode, setMultiSelectMode] = useState<boolean>(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
@@ -73,11 +76,8 @@ function SessionDetailContent() {
   const longPressTriggeredPhotoIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const client = supabase!;
-    if (!client) {
-      setCurrentUser(null);
-      return;
-    }
+    const client = supabase;
+    if (!client) return;
 
     let isMounted = true;
 
@@ -100,16 +100,15 @@ function SessionDetailContent() {
   useEffect(() => {
     if (!sessionId) return;
 
-    const client = supabase!;
-    if (!client) {
-      setIsLoading(false);
-      return;
-    }
+    const client = supabase;
+    if (!client) return;
+
+    const safeClient = client;
 
     async function fetchSession() {
       try {
         setIsLoading(true);
-        const { data, error } = await client
+        const { data, error } = await safeClient
           .from("sessions")
           .select("*")
           .eq("id", Number(sessionId))
@@ -285,6 +284,8 @@ async function downloadSinglePhoto(photo: DriveItem) {
       return;
     }
 
+    setWhatsappSending(true);
+
     const message = buildWhatsAppMessage(
       session?.location,
       photos.map((photo) => ({
@@ -296,6 +297,10 @@ async function downloadSinglePhoto(photo: DriveItem) {
 
     const url = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
+
+    window.setTimeout(() => {
+      setWhatsappSending(false);
+    }, 700);
   }
 
   function clearSelectionTimer() {
@@ -365,12 +370,27 @@ async function downloadSinglePhoto(photo: DriveItem) {
         }
       >
         <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-6 lg:px-8">
-          <button
-            onClick={handleBackFolder}
-            className="flex items-center gap-1 text-sm font-bold text-[#7B4FE0] transition hover:opacity-90 sm:text-base"
-          >
-            ‹ Kembali
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBackFolder}
+              className="flex items-center gap-1 text-sm font-bold text-[#7B4FE0] transition hover:opacity-90 sm:text-base"
+            >
+              ‹ Kembali
+            </button>
+
+            {!multiSelectMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMultiSelectMode(true);
+                  setSelectedPhotoIds([]);
+                }}
+                className="rounded-lg border border-[#7B4FE0]/40 bg-[#181520] px-2 py-1.5 text-[9px] font-bold text-[#D9CBFF] shadow-lg shadow-[#7B4FE0]/10 transition hover:border-[#7B4FE0] hover:text-white sm:text-[10px]"
+              >
+                Pilih Banyak
+              </button>
+            )}
+          </div>
 
           <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden text-center text-xs font-bold text-[#AAA1B8] sm:text-sm">
             <span className="shrink-0 text-[#7B4FE0]">📁</span>
