@@ -197,12 +197,6 @@ async function downloadSinglePhoto(photo: DriveItem) {
 
 
   async function handleDownloadPhoto(fileId: string) {
-    if (!currentUser) {
-      alert("🔒 Harap login Google terlebih dahulu!");
-      router.push("/profile");
-      return;
-    }
-
     const photo = drivePhotos.find((item) => item.id === fileId);
 
     if (!photo) return;
@@ -217,12 +211,6 @@ async function downloadSinglePhoto(photo: DriveItem) {
 
   async function handleDownloadSelectedPhotos() {
     if (!selectedPhotoIds.length || downloadProgress.active) return;
-
-    if (!currentUser) {
-      alert("🔒 Harap login Google terlebih dahulu!");
-      router.push("/profile");
-      return;
-    }
 
     const queue = drivePhotos.filter((photo) =>
       selectedPhotoIds.includes(photo.id),
@@ -268,12 +256,6 @@ async function downloadSinglePhoto(photo: DriveItem) {
 
   function openWhatsAppChat(photos: DriveItem[]) {
     const whatsappNumber = normalizeWhatsAppNumber(session?.whatsapp_number);
-
-    if (!currentUser) {
-      alert("🔒 Harap login untuk mengirim ke WhatsApp.");
-      router.push("/profile");
-      return;
-    }
 
     if (!whatsappNumber) {
       alert("Nomor WhatsApp fotografer belum tersedia.");
@@ -434,7 +416,6 @@ async function downloadSinglePhoto(photo: DriveItem) {
                     className="rounded-lg bg-[#25D366] px-2 py-1.5 text-[9px] font-bold text-white shadow-lg shadow-[#25D366]/30 transition hover:bg-[#1ebc5c] sm:text-[10px]"
                     disabled={
                       whatsappSending ||
-                      !currentUser ||
                       !normalizeWhatsAppNumber(session?.whatsapp_number)
                     }
                   >
@@ -656,7 +637,7 @@ async function downloadSinglePhoto(photo: DriveItem) {
               </p>
 
               <div className="space-y-2">
-                {currentUser && normalizeWhatsAppNumber(session?.whatsapp_number) ? (
+                {normalizeWhatsAppNumber(session?.whatsapp_number) ? (
                   <button
                     onClick={() => openWhatsAppChat([selectedPhoto])}
                     className="block w-full rounded-xl bg-[#25D366] py-3 text-sm font-bold text-white shadow-lg shadow-[#25D366]/30 transition-all hover:bg-[#1ebc5c] sm:text-base disabled:cursor-not-allowed disabled:opacity-70"
