@@ -286,14 +286,18 @@ async function downloadSinglePhoto(photo: DriveItem) {
 
     setWhatsappSending(true);
 
-    const message = buildWhatsAppMessage(
-      session?.location,
-      photos.map((photo) => ({
+    const currentSubfolder = folderStack[folderStack.length - 1]?.name || "";
+    const message = buildWhatsAppMessage({
+      sessionLocation: session?.location,
+      sessionDate: session?.session_date,
+      instagramLink: session?.instagram_link,
+      currentSubfolder,
+      photos: photos.map((photo) => ({
         id: photo.id,
         webViewLink: photo.webViewLink,
         name: photo.name,
       })),
-    );
+    });
 
     const url = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");

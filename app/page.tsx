@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { buildWhatsAppMessage, normalizeWhatsAppNumber } from "@/lib/whatsapp";
 import Link from "next/link";
 import WhatsAppIcon from "../img/whatsapp.png";
 
@@ -285,7 +286,14 @@ export default function Home() {
                             )}
                             {rawWa && (
                               <a
-                                href={`https://wa.me/${rawWa.startsWith("0") ? "62" + rawWa.substring(1) : rawWa}`}
+                                href={`https://wa.me/${normalizeWhatsAppNumber(rawWa)}?text=${encodeURIComponent(
+                                  buildWhatsAppMessage({
+                                    sessionLocation: session.location,
+                                    sessionDate: session.session_date,
+                                    instagramLink: session.instagram_link,
+                                    photos: [],
+                                  }),
+                                )}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1.5 text-[#25D366] hover:underline"

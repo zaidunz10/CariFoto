@@ -9,21 +9,53 @@ export function normalizeWhatsAppNumber(value?: string) {
   return cleaned;
 }
 
-export function buildWhatsAppMessage(
-  sessionLocation: string | undefined,
-  photos: Array<{ id: string; webViewLink?: string; name?: string }>,
-) {
-  if (photos.length === 1) {
-    return `Halo, ini foto dari sesi ${sessionLocation || "foto"}: ${
-      photos[0].webViewLink ||
-      `https://drive.google.com/uc?export=view&id=${photos[0].id}`
-    }`;
-  }
+function formatSessionDayDate(dateStr?: string) {
+  if (!dateStr) return "";
 
-  return `Halo, saya kirim ${photos.length} foto dari sesi ${sessionLocation || "foto"}:\n${photos
-    .map(
-      (photo, index) =>
-        `${index + 1}. ${photo.webViewLink || `https://drive.google.com/uc?export=view&id=${photo.id}`}`,
-    )
-    .join("\n")}`;
+  const value = dateStr.slice(0, 10);
+  if (!value || value === "null") return "";
+
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat("id-ID", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(parsed);
+}
+
+export function buildWhatsAppMessage({
+  sessionLocation,
+  sessionDate,
+  instagramLink,
+  currentSubfolder,
+  photos,
+}: {
+  sessionLocation?: string;
+  sessionDate?: string;
+  instagramLink?: string;
+  currentSubfolder?: string;
+  photos: Array<{ id: string; webViewLink?: string; name?: string }>;
+}) {
+  const instagramHandle = (instagramLink ?? "").trim().replace(/^@/, "");
+  const dayDateFormatted = formatSessionDayDate(sessionDate);
+  const fileList = photos
+    .map((photo, index) => `${index + 1}. *${photo.name || `Foto ${index + 1}`}*`)
+    .join("\n");
+
+  const header = instagramHandle
+    ? `Halo kak @${instagramHandle}! 💬\n\n`
+    : "Halo kak! 💬\n\n";
+
+  const locationText = `📍 Lokasi: *${sessionLocation || "Lokasi Hunting"}*\n`;
+  const dateText = dayDateFormatted
+    ? `📅 Hari & Tanggal: *${dayDateFormatted}*\n`
+    : "";
+  const folderText = currentSubfolder
+    ? `⏰ Jam EXIF: *${currentSubfolder}*\n`
+    : "";
+
+  return `${header}Saya mau pesan/beli foto jepretan di:\n${locationText}${dateText}${folderText}\n📄 Daftar Foto (${photos.length} foto):\n${fileList}`;
 }
