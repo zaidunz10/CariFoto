@@ -11,6 +11,7 @@ interface DriveItem {
   mimeType: string;
   thumbnailLink?: string;
   webViewLink?: string;
+  photoCount?: number;
 }
 
 interface Session {
@@ -23,14 +24,7 @@ interface Session {
   drive_folder_id?: string;
 }
 
-type AuthUser = {
-  id: string;
-  email?: string | null;
-};
-
-const DRIVE_API_KEY =
-  process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY ||
-  "AIzaSyCr0nZXdPz9hV9TCBpzEdSxOmXovqGCMCg";
+const DRIVE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY || "";
 
 function extractFolderId(urlOrId?: string): string | null {
   if (!urlOrId) return null;
@@ -65,7 +59,6 @@ function SessionDetailContent() {
     { id: string; name: string }[]
   >([]);
 
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const gridColumns = 2;
   const [selectedPhoto, setSelectedPhoto] = useState<DriveItem | null>(null);
@@ -74,28 +67,6 @@ function SessionDetailContent() {
   const [whatsappSending, setWhatsappSending] = useState<boolean>(false);
   const selectionTimerRef = useRef<number | null>(null);
   const longPressTriggeredPhotoIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const client = supabase;
-    if (!client) return;
-
-    let isMounted = true;
-
-    client.auth.getUser().then(({ data }) => {
-      if (isMounted) setCurrentUser(data.user ?? null);
-    });
-
-    const { data: authListener } = client.auth.onAuthStateChange(
-      (_event, session) => {
-        if (isMounted) setCurrentUser(session?.user || null);
-      },
-    );
-
-    return () => {
-      isMounted = false;
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -132,6 +103,36 @@ function SessionDetailContent() {
     fetchSession();
   }, [sessionId]);
 
+  async function countPhotosInFolder(folderId: string) {
+    let photoCount = 0;
+    let pageToken = "";
+
+    try {
+      do {
+        const query = encodeURIComponent(
+          `'${folderId}' in parents and trashed=false and mimeType contains 'image/'`,
+        );
+        const fields = encodeURIComponent("files(id),nextPageToken");
+        const pageParam = pageToken
+          ? `&pageToken=${encodeURIComponent(pageToken)}`
+          : "";
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}&key=${DRIVE_API_KEY}&pageSize=1000${pageParam}`,
+        );
+
+        if (!res.ok) break;
+
+        const json = await res.json();
+        photoCount += (json.files || []).length;
+        pageToken = json.nextPageToken || "";
+      } while (pageToken);
+    } catch (error) {
+      console.error("Gagal menghitung foto folder:", error);
+    }
+
+    return photoCount;
+  }
+
   async function loadDriveFolderContent(folderId: string) {
     try {
       setIsLoading(true);
@@ -152,11 +153,18 @@ function SessionDetailContent() {
         .filter((f) => f.mimeType === "application/vnd.google-apps.folder")
         .sort((a, b) => a.name.localeCompare(b.name));
 
+      const subfoldersWithCounts = await Promise.all(
+        subfolders.map(async (folder) => ({
+          ...folder,
+          photoCount: await countPhotosInFolder(folder.id),
+        })),
+      );
+
       const images = files
         .filter((f) => f.mimeType.startsWith("image/"))
         .sort((a, b) => a.name.localeCompare(b.name));
 
-      setDriveFolders(subfolders);
+      setDriveFolders(subfoldersWithCounts);
       setDrivePhotos(images);
     } catch (err) {
       console.error("Gagal membaca Google Drive API:", err);
@@ -493,13 +501,18 @@ async function downloadSinglePhoto(photo: DriveItem) {
               <div
                 key={folder.id}
                 onClick={() => handleOpenFolder(folder)}
-                className="bg-[#181520] border border-[#302A3A] rounded-xl p-3.5 flex items-center justify-between cursor-pointer hover:border-[#7B4FE0] transition-all shadow-md min-w-[180px]"
+                className="bg-[#181520] border border-[#302A3A] rounded-xl p-3.5 flex items-center justify-between cursor-pointer hover:border-[#7B4FE0] transition-all shadow-md min-w-45"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className="text-xl shrink-0">📁</span>
-                  <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap overflow-hidden text-ellipsis">
-                    {folder.name}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="block truncate text-xs sm:text-sm font-bold text-white">
+                      {folder.name}
+                    </span>
+                    <span className="block text-[10px] sm:text-xs font-medium text-[#AAA1B8]">
+                      {folder.photoCount ?? 0} foto
+                    </span>
+                  </div>
                 </div>
                 <span className="text-[#7B4FE0] text-xs font-bold shrink-0 ml-2">
                   BUKA ›
@@ -526,70 +539,77 @@ async function downloadSinglePhoto(photo: DriveItem) {
           </p>
         </div>
       ) : (
-        <div
-          className={`grid gap-3.5 ${
-            gridColumns === 2
-              ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
-              : "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
-          }`}
-        >
-          {drivePhotos.map((photo) => {
-            const isSelected = selectedPhotoIds.includes(photo.id);
+        <>
+          {drivePhotos.length > 0 && (
+            <h2 className="mb-3 text-sm font-bold text-[#D9CBFF]">
+              {drivePhotos.length} foto ditemukan dalam folder ini
+            </h2>
+          )}
+          <div
+            className={`grid gap-3.5 ${
+              gridColumns === 2
+                ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
+                : "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
+            }`}
+          >
+            {drivePhotos.map((photo) => {
+              const isSelected = selectedPhotoIds.includes(photo.id);
 
-            return (
-              <div
-                key={photo.id}
-                onPointerDown={() => handlePhotoPressStart(photo)}
-                onPointerUp={() => handlePhotoPressEnd()}
-                onPointerLeave={() => handlePhotoPressEnd()}
-                onPointerCancel={() => handlePhotoPressEnd()}
-                onMouseDown={() => handlePhotoPressStart(photo)}
-                onMouseUp={() => handlePhotoPressEnd()}
-                onTouchStart={() => handlePhotoPressStart(photo)}
-                onTouchEnd={() => handlePhotoPressEnd()}
-                onTouchCancel={() => handlePhotoPressEnd()}
-                onClick={() => {
-                  if (longPressTriggeredPhotoIdRef.current === photo.id) {
-                    longPressTriggeredPhotoIdRef.current = null;
-                    return;
-                  }
+              return (
+                <div
+                  key={photo.id}
+                  onPointerDown={() => handlePhotoPressStart(photo)}
+                  onPointerUp={() => handlePhotoPressEnd()}
+                  onPointerLeave={() => handlePhotoPressEnd()}
+                  onPointerCancel={() => handlePhotoPressEnd()}
+                  onMouseDown={() => handlePhotoPressStart(photo)}
+                  onMouseUp={() => handlePhotoPressEnd()}
+                  onTouchStart={() => handlePhotoPressStart(photo)}
+                  onTouchEnd={() => handlePhotoPressEnd()}
+                  onTouchCancel={() => handlePhotoPressEnd()}
+                  onClick={() => {
+                    if (longPressTriggeredPhotoIdRef.current === photo.id) {
+                      longPressTriggeredPhotoIdRef.current = null;
+                      return;
+                    }
 
-                  if (multiSelectMode) {
-                    togglePhotoSelection(photo);
-                    return;
-                  }
+                    if (multiSelectMode) {
+                      togglePhotoSelection(photo);
+                      return;
+                    }
 
-                  setSelectedPhoto(photo);
-                }}
-                className={`relative overflow-hidden rounded-xl border bg-[#181520] shadow-md transition-all cursor-pointer ${
-                  isSelected
-                    ? "border-[#7B4FE0] ring-2 ring-[#7B4FE0]/40"
-                    : "border-[#302A3A] hover:border-[#7B4FE0]"
-                }`}
-              >
-                <div className="relative aspect-square w-full bg-[#0F172A] p-1">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={getPhotoImageUrl(photo, 800)}
-                    alt={photo.name || "Foto"}
-                    referrerPolicy="no-referrer"
-                    className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-105"
-                    loading="lazy"
-                    onError={(e) => {
-                      e.currentTarget.src = `https://drive.google.com/thumbnail?id=${photo.id}&sz=w800`;
-                    }}
-                  />
-                </div>
-
-                {isSelected && (
-                  <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#7B4FE0] text-xs font-bold text-white shadow-lg shadow-[#7B4FE0]/30">
-                    ✓
+                    setSelectedPhoto(photo);
+                  }}
+                  className={`relative overflow-hidden rounded-xl border bg-[#181520] shadow-md transition-all cursor-pointer ${
+                    isSelected
+                      ? "border-[#7B4FE0] ring-2 ring-[#7B4FE0]/40"
+                      : "border-[#302A3A] hover:border-[#7B4FE0]"
+                  }`}
+                >
+                  <div className="relative aspect-square w-full bg-[#0F172A] p-1">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={getPhotoImageUrl(photo, 800)}
+                      alt={photo.name || "Foto"}
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-105"
+                      loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://drive.google.com/thumbnail?id=${photo.id}&sz=w800`;
+                      }}
+                    />
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  {isSelected && (
+                    <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#7B4FE0] text-xs font-bold text-white shadow-lg shadow-[#7B4FE0]/30">
+                      ✓
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Full Screen Photo Viewer Modal */}
