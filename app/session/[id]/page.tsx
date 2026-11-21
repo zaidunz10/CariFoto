@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { buildWhatsAppMessage, normalizeWhatsAppNumber } from "@/lib/whatsapp";
@@ -21,6 +21,27 @@ interface Session {
   instagram_link?: string;
   price_single?: number;
   drive_folder_id?: string;
+}
+
+interface PhotoMetadata {
+  id: number;
+  session_id: number;
+  drive_file_id: string;
+  file_name?: string | null;
+  exif_time?: string | null;
+  plate_number?: string | null;
+  bike_model?: string | null;
+  bike_color?: string | null;
+  jacket_color?: string | null;
+}
+
+interface PhotoFilters {
+  plateNumber: string;
+  bikeModel: string;
+  bikeColor: string;
+  jacketColor: string;
+  exifTimeFrom: string;
+  exifTimeTo: string;
 }
 
 type AuthUser = {
@@ -47,6 +68,16 @@ function getPhotoImageUrl(photo: DriveItem, size: number = 800): string {
   return `https://drive.google.com/thumbnail?id=${photo.id}&sz=w${size}`;
 }
 
+function parseTimeToMinutes(timeStr?: string | null): number | null {
+  if (!timeStr) return null;
+  const match = timeStr.trim().match(/^(\d{1,2})[:.](\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
 function SessionDetailContent() {
   const [downloadProgress, setDownloadProgress] = useState({
     current: 0,
@@ -61,6 +92,28 @@ function SessionDetailContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [driveFolders, setDriveFolders] = useState<DriveItem[]>([]);
   const [drivePhotos, setDrivePhotos] = useState<DriveItem[]>([]);
+  const [photoMetadata, setPhotoMetadata] = useState<PhotoMetadata[]>([]);
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
+
+  // State dropdown search & filter aktif
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [draftFilters, setDraftFilters] = useState<PhotoFilters>({
+    plateNumber: "",
+    bikeModel: "",
+    bikeColor: "",
+    jacketColor: "",
+    exifTimeFrom: "",
+    exifTimeTo: "",
+  });
+  const [appliedFilters, setAppliedFilters] = useState<PhotoFilters>({
+    plateNumber: "",
+    bikeModel: "",
+    bikeColor: "",
+    jacketColor: "",
+    exifTimeFrom: "",
+    exifTimeTo: "",
+  });
+
   const [folderStack, setFolderStack] = useState<
     { id: string; name: string }[]
   >([]);
@@ -164,40 +217,154 @@ function SessionDetailContent() {
       setIsLoading(false);
     }
   }
- 
-async function downloadSinglePhoto(photo: DriveItem) {
-  const response = await fetch(
-    `/api/drive-download?id=${encodeURIComponent(photo.id)}`
-  );
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
+  const uniqueFilterOptions = useMemo(() => {
+    const unique = (values: (string | null | undefined)[]) => {
+      const map = new Map<string, string>();
+      for (const raw of values) {
+        const trimmed = raw?.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (!map.has(key)) map.set(key, trimmed);
+      }
+      return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+    };
 
-    console.error("Detail download gagal:", errorData);
+    return {
+      bikeModels: unique(photoMetadata.map((photo) => photo.bike_model)),
+      bikeColors: unique(photoMetadata.map((photo) => photo.bike_color)),
+      jacketColors: unique(photoMetadata.map((photo) => photo.jacket_color)),
+    };
+  }, [photoMetadata]);
 
-    throw new Error(
-      `${photo.name}: ${errorData?.detail || errorData?.error || response.statusText}`
+  const activeFilterCount = Object.values(appliedFilters).filter((value) =>
+    value.trim(),
+  ).length;
+
+  // Foto yang ditampilkan:
+  // - Jika filter aktif & user berada di folder luar (drivePhotos kosong, masih di daftar sub-folder jam),
+  //   otomatis ambil dari seluruh photoMetadata sesi ini agar semua motor langsung muncul!
+  // - Jika user sudah berada di dalam folder foto (drivePhotos ada), filter foto di folder tersebut.
+  const displayedPhotos = useMemo(() => {
+    const normalize = (value?: string | null) =>
+      value?.toLowerCase().trim().replace(/\s+/g, " ") || "";
+    const compact = (value?: string | null) =>
+      value?.toLowerCase().replace(/\s+/g, "") || "";
+
+    const filters = {
+      plateNumber: normalize(appliedFilters.plateNumber),
+      plateCompact: compact(appliedFilters.plateNumber),
+      bikeModel: normalize(appliedFilters.bikeModel),
+      bikeColor: normalize(appliedFilters.bikeColor),
+      jacketColor: normalize(appliedFilters.jacketColor),
+      fromMinutes: parseTimeToMinutes(appliedFilters.exifTimeFrom),
+      toMinutes: parseTimeToMinutes(appliedFilters.exifTimeTo),
+    };
+
+    if (activeFilterCount === 0) return drivePhotos;
+
+    const metadataByDriveId = new Map(
+      photoMetadata.map((photo) => [photo.drive_file_id, photo]),
     );
+
+    const sourceList: DriveItem[] =
+      drivePhotos.length > 0
+        ? drivePhotos
+        : photoMetadata.map((meta) => ({
+            id: meta.drive_file_id,
+            name: meta.file_name || `${meta.drive_file_id}.jpg`,
+            mimeType: "image/jpeg",
+            webViewLink: `https://drive.google.com/file/d/${meta.drive_file_id}/view`,
+          }));
+
+    return sourceList.filter((drivePhoto) => {
+      const metadata = metadataByDriveId.get(drivePhoto.id);
+      if (!metadata) return false;
+
+      const plateNumber = normalize(metadata.plate_number);
+      const plateCompact = compact(metadata.plate_number);
+      const bikeModel = normalize(metadata.bike_model);
+      const bikeColor = normalize(metadata.bike_color);
+      const jacketColor = normalize(metadata.jacket_color);
+      const photoMinutes = parseTimeToMinutes(metadata.exif_time);
+
+      const matchPlate =
+        !filters.plateNumber ||
+        plateNumber.includes(filters.plateNumber) ||
+        plateCompact.includes(filters.plateCompact);
+
+      const matchTimeFrom =
+        filters.fromMinutes === null ||
+        (photoMinutes !== null && photoMinutes >= filters.fromMinutes);
+
+      const matchTimeTo =
+        filters.toMinutes === null ||
+        (photoMinutes !== null && photoMinutes <= filters.toMinutes);
+
+      return (
+        matchPlate &&
+        (!filters.bikeModel || bikeModel.includes(filters.bikeModel)) &&
+        (!filters.bikeColor || bikeColor.includes(filters.bikeColor)) &&
+        (!filters.jacketColor || jacketColor.includes(filters.jacketColor)) &&
+        matchTimeFrom &&
+        matchTimeTo
+      );
+    });
+  }, [drivePhotos, photoMetadata, appliedFilters, activeFilterCount]);
+
+  function handleApplySearch(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    setSelectedPhotoIds([]);
+    setAppliedFilters({ ...draftFilters });
+    setIsSearchOpen(false);
   }
 
-  const blob = await response.blob();
-  const blobUrl = URL.createObjectURL(blob);
+  function handleResetFilters() {
+    const empty: PhotoFilters = {
+      plateNumber: "",
+      bikeModel: "",
+      bikeColor: "",
+      jacketColor: "",
+      exifTimeFrom: "",
+      exifTimeTo: "",
+    };
+    setDraftFilters(empty);
+    setAppliedFilters(empty);
+    setSelectedPhotoIds([]);
+  }
 
-  const link = document.createElement("a");
-  link.href = blobUrl;
-  link.download = photo.name || "photo.jpg";
+  async function downloadSinglePhoto(photo: DriveItem) {
+    const response = await fetch(
+      `/api/drive-download?id=${encodeURIComponent(photo.id)}`,
+    );
 
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
 
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  URL.revokeObjectURL(blobUrl);
-}
+      console.error("Detail download gagal:", errorData);
 
+      throw new Error(
+        `${photo.name}: ${errorData?.detail || errorData?.error || response.statusText}`,
+      );
+    }
+
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = photo.name || "photo.jpg";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    URL.revokeObjectURL(blobUrl);
+  }
 
   async function handleDownloadPhoto(fileId: string) {
-    const photo = drivePhotos.find((item) => item.id === fileId);
+    const photo = displayedPhotos.find((item) => item.id === fileId);
 
     if (!photo) return;
 
@@ -212,7 +379,7 @@ async function downloadSinglePhoto(photo: DriveItem) {
   async function handleDownloadSelectedPhotos() {
     if (!selectedPhotoIds.length || downloadProgress.active) return;
 
-    const queue = drivePhotos.filter((photo) =>
+    const queue = displayedPhotos.filter((photo) =>
       selectedPhotoIds.includes(photo.id),
     );
 
@@ -349,6 +516,57 @@ async function downloadSinglePhoto(photo: DriveItem) {
     }
   }
 
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const client = supabase;
+    if (!client) return;
+
+    const safeClient = client;
+    let isMounted = true;
+
+    async function fetchPhotoMetadata() {
+      try {
+        setIsLoadingMetadata(true);
+        const allRows: PhotoMetadata[] = [];
+        const pageSize = 1000;
+
+        for (let from = 0; ; from += pageSize) {
+          const { data, error } = await safeClient
+            .from("photos")
+            .select(
+              "id,session_id,drive_file_id,file_name,exif_time,plate_number,bike_model,bike_color,jacket_color",
+            )
+            .eq("session_id", Number(sessionId))
+            .range(from, from + pageSize - 1)
+            .order("id", { ascending: true });
+
+          if (error) throw error;
+
+          const rows = (data || []) as PhotoMetadata[];
+          allRows.push(...rows);
+
+          if (rows.length < pageSize) break;
+        }
+
+        if (isMounted) setPhotoMetadata(allRows);
+      } catch (err) {
+        console.error("Gagal memuat metadata foto sesi:", err);
+        if (isMounted) setPhotoMetadata([]);
+      } finally {
+        if (isMounted) setIsLoadingMetadata(false);
+      }
+    }
+
+    fetchPhotoMetadata();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [sessionId]);
+
+  const hasSearchData = !isLoadingMetadata && photoMetadata.length > 0;
+
   return (
     <main
       className={`min-h-screen w-full bg-[#100E17] text-white px-3 sm:px-6 lg:px-8 py-3 pb-28 ${multiSelectMode ? "pt-20" : ""}`}
@@ -382,6 +600,29 @@ async function downloadSinglePhoto(photo: DriveItem) {
                 Pilih Banyak
               </button>
             )}
+
+            {/* Tombol Dropdown Cari Foto (muncul jika session memiliki data di tabel photos) */}
+            {!multiSelectMode && hasSearchData && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsSearchOpen((prev) => !prev)}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[9px] font-bold shadow-lg transition sm:text-[10px] ${
+                    isSearchOpen || activeFilterCount > 0
+                      ? "border-[#7B4FE0] bg-[#7B4FE0] text-white shadow-[#7B4FE0]/25"
+                      : "border-[#7B4FE0]/40 bg-[#181520] text-[#D9CBFF] shadow-[#7B4FE0]/10 hover:border-[#7B4FE0] hover:text-white"
+                  }`}
+                >
+                  <span>🔎 Cari Foto</span>
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-white/20 px-1.5 py-0.2 text-[9px]">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                  <span className="text-[8px]">{isSearchOpen ? "▲" : "▼"}</span>
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden text-center text-xs font-bold text-[#AAA1B8] sm:text-sm">
@@ -408,7 +649,7 @@ async function downloadSinglePhoto(photo: DriveItem) {
                   <button
                     onClick={() =>
                       openWhatsAppChat(
-                        drivePhotos.filter((photo) =>
+                        displayedPhotos.filter((photo) =>
                           selectedPhotoIds.includes(photo.id),
                         ),
                       )
@@ -446,7 +687,185 @@ async function downloadSinglePhoto(photo: DriveItem) {
             </div>
           )}
         </div>
+
+        {/* Dropdown Panel Filter (tidak mendorong / menghalangi foto saat tertutup) */}
+        {hasSearchData && isSearchOpen && (
+          <div className="border-t border-[#302A3A] bg-[#181520]/98 shadow-2xl backdrop-blur-xl">
+            <form
+              onSubmit={handleApplySearch}
+              className="mx-auto max-w-[1800px] px-3 py-4 sm:px-6 lg:px-8"
+            >
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-[11px] text-[#AAA1B8]">
+                  Isi satu atau beberapa kolom (opsional), lalu tekan{" "}
+                  <strong className="text-white">Cari</strong>.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsSearchOpen(false)}
+                  className="text-xs font-bold text-[#AAA1B8] hover:text-white"
+                >
+                  Tutup ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                <label className="text-[11px] font-bold text-[#AAA1B8]">
+                  Plat / Nomor Kendaraan
+                  <input
+                    value={draftFilters.plateNumber}
+                    onChange={(event) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        plateNumber: event.target.value,
+                      }))
+                    }
+                    placeholder="Contoh: D 5421"
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none placeholder:text-[#675F73] focus:border-[#7B4FE0]"
+                  />
+                </label>
+
+                <label className="text-[11px] font-bold text-[#AAA1B8]">
+                  Model Motor
+                  <input
+                    list="bike-model-options"
+                    value={draftFilters.bikeModel}
+                    onChange={(event) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        bikeModel: event.target.value,
+                      }))
+                    }
+                    placeholder="Contoh: Vario / NMAX"
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none placeholder:text-[#675F73] focus:border-[#7B4FE0]"
+                  />
+                  <datalist id="bike-model-options">
+                    {uniqueFilterOptions.bikeModels.map((value) => (
+                      <option key={value} value={value} />
+                    ))}
+                  </datalist>
+                </label>
+
+                <label className="text-[11px] font-bold text-[#AAA1B8]">
+                  Warna Motor
+                  <input
+                    list="bike-color-options"
+                    value={draftFilters.bikeColor}
+                    onChange={(event) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        bikeColor: event.target.value,
+                      }))
+                    }
+                    placeholder="Contoh: Hitam"
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none placeholder:text-[#675F73] focus:border-[#7B4FE0]"
+                  />
+                  <datalist id="bike-color-options">
+                    {uniqueFilterOptions.bikeColors.map((value) => (
+                      <option key={value} value={value} />
+                    ))}
+                  </datalist>
+                </label>
+
+                <label className="text-[11px] font-bold text-[#AAA1B8]">
+                  Warna Jaket
+                  <input
+                    list="jacket-color-options"
+                    value={draftFilters.jacketColor}
+                    onChange={(event) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        jacketColor: event.target.value,
+                      }))
+                    }
+                    placeholder="Contoh: Putih"
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none placeholder:text-[#675F73] focus:border-[#7B4FE0]"
+                  />
+                  <datalist id="jacket-color-options">
+                    {uniqueFilterOptions.jacketColors.map((value) => (
+                      <option key={value} value={value} />
+                    ))}
+                  </datalist>
+                </label>
+
+                <label className="text-[11px] font-bold text-[#AAA1B8]">
+                  Dari Jam EXIF
+                  <input
+                    type="time"
+                    value={draftFilters.exifTimeFrom}
+                    onChange={(event) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        exifTimeFrom: event.target.value,
+                      }))
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none focus:border-[#7B4FE0] [color-scheme:dark]"
+                  />
+                </label>
+
+                <label className="text-[11px] font-bold text-[#AAA1B8]">
+                  Sampai Jam EXIF
+                  <input
+                    type="time"
+                    value={draftFilters.exifTimeTo}
+                    onChange={(event) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        exifTimeTo: event.target.value,
+                      }))
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none focus:border-[#7B4FE0] [color-scheme:dark]"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="rounded-lg border border-[#302A3A] bg-[#100E17] px-4 py-2 text-xs font-bold text-[#AAA1B8] transition hover:border-[#7B4FE0] hover:text-white"
+                >
+                  Reset
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-[#7B4FE0] px-5 py-2 text-xs font-bold text-white shadow-lg shadow-[#7B4FE0]/30 transition hover:bg-[#683ec9]"
+                >
+                  🔎 Cari Foto
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </header>
+
+      {/* Bar Info Ringkas saat filter sedang aktif */}
+      {hasSearchData && activeFilterCount > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#7B4FE0]/40 bg-[#181520] px-3.5 py-2.5 text-xs">
+          <span className="font-bold text-[#D9CBFF]">
+            {drivePhotos.length > 0
+              ? `Menampilkan ${displayedPhotos.length} dari ${drivePhotos.length} foto di folder ini`
+              : `Ditemukan ${displayedPhotos.length} foto di seluruh sesi ini`}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              className="font-bold text-[#7B4FE0] hover:underline"
+            >
+              Ubah filter
+            </button>
+            <span className="text-[#302A3A]">|</span>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="font-bold text-[#FFB4A2] hover:underline"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
 
       {downloadProgress.total > 0 && (
         <div className="mb-4 rounded-xl border border-[#302A3A] bg-[#181520] p-3">
@@ -483,7 +902,7 @@ async function downloadSinglePhoto(photo: DriveItem) {
       )}
 
       {/* Subfolders Jam EXIF (Presisi Single Line, Anti-Wrap Kebawah) */}
-      {driveFolders.length > 0 && (
+      {driveFolders.length > 0 && activeFilterCount === 0 && (
         <section className="mb-6 space-y-2">
           <h2 className="text-xs sm:text-sm font-bold text-[#AAA1B8]">
             PILIH SUB-FOLDER JAM EXIF:
@@ -493,7 +912,7 @@ async function downloadSinglePhoto(photo: DriveItem) {
               <div
                 key={folder.id}
                 onClick={() => handleOpenFolder(folder)}
-                className="bg-[#181520] border border-[#302A3A] rounded-xl p-3.5 flex items-center justify-between cursor-pointer hover:border-[#7B4FE0] transition-all shadow-md min-w-[180px]"
+                className="bg-[#181520] border border-[#302A3A] rounded-xl p-3.5 flex items-center justify-between cursor-pointer hover:border-[#7B4FE0] transition-all shadow-md min-w-45"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className="text-xl shrink-0">📁</span>
@@ -515,7 +934,7 @@ async function downloadSinglePhoto(photo: DriveItem) {
         <div className="text-center py-16 text-xs text-[#AAA1B8]">
           Memuat isi folder Google Drive...
         </div>
-      ) : driveFolders.length === 0 && drivePhotos.length === 0 ? (
+      ) : driveFolders.length === 0 && displayedPhotos.length === 0 ? (
         <div className="text-center py-16 bg-[#181520] border border-[#302A3A] rounded-2xl p-6">
           <span className="text-4xl mb-3 block">📂</span>
           <p className="text-sm font-bold text-white mb-1">
@@ -523,6 +942,16 @@ async function downloadSinglePhoto(photo: DriveItem) {
           </p>
           <p className="text-xs text-[#AAA1B8]">
             Belum ada file foto di folder ini.
+          </p>
+        </div>
+      ) : activeFilterCount > 0 && displayedPhotos.length === 0 ? (
+        <div className="text-center py-16 bg-[#181520] border border-[#302A3A] rounded-2xl p-6">
+          <span className="text-4xl mb-3 block">🔎</span>
+          <p className="text-sm font-bold text-white mb-1">
+            Foto tidak ditemukan
+          </p>
+          <p className="text-xs text-[#AAA1B8]">
+            Coba kurangi filter atau kosongkan salah satu isian pencarian.
           </p>
         </div>
       ) : (
@@ -533,7 +962,7 @@ async function downloadSinglePhoto(photo: DriveItem) {
               : "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
           }`}
         >
-          {drivePhotos.map((photo) => {
+          {displayedPhotos.map((photo) => {
             const isSelected = selectedPhotoIds.includes(photo.id);
 
             return (
