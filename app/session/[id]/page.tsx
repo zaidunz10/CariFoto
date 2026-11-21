@@ -95,8 +95,8 @@ function SessionDetailContent() {
   const [photoMetadata, setPhotoMetadata] = useState<PhotoMetadata[]>([]);
   const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
 
-  // State dropdown search & filter aktif
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showSearchBanner, setShowSearchBanner] = useState(true);
   const [draftFilters, setDraftFilters] = useState<PhotoFilters>({
     plateNumber: "",
     bikeModel: "",
@@ -241,10 +241,6 @@ function SessionDetailContent() {
     value.trim(),
   ).length;
 
-  // Foto yang ditampilkan:
-  // - Jika filter aktif & user berada di folder luar (drivePhotos kosong, masih di daftar sub-folder jam),
-  //   otomatis ambil dari seluruh photoMetadata sesi ini agar semua motor langsung muncul!
-  // - Jika user sudah berada di dalam folder foto (drivePhotos ada), filter foto di folder tersebut.
   const displayedPhotos = useMemo(() => {
     const normalize = (value?: string | null) =>
       value?.toLowerCase().trim().replace(/\s+/g, " ") || "";
@@ -303,9 +299,9 @@ function SessionDetailContent() {
 
       return (
         matchPlate &&
-        (!filters.bikeModel || bikeModel.includes(filters.bikeModel)) &&
-        (!filters.bikeColor || bikeColor.includes(filters.bikeColor)) &&
-        (!filters.jacketColor || jacketColor.includes(filters.jacketColor)) &&
+        (!filters.bikeModel || bikeModel === filters.bikeModel) &&
+        (!filters.bikeColor || bikeColor === filters.bikeColor) &&
+        (!filters.jacketColor || jacketColor === filters.jacketColor) &&
         matchTimeFrom &&
         matchTimeTo
       );
@@ -601,7 +597,7 @@ function SessionDetailContent() {
               </button>
             )}
 
-            {/* Tombol Dropdown Cari Foto (muncul jika session memiliki data di tabel photos) */}
+            {/* Tombol Dropdown Cari Foto */}
             {!multiSelectMode && hasSearchData && (
               <div className="relative">
                 <button
@@ -688,7 +684,7 @@ function SessionDetailContent() {
           )}
         </div>
 
-        {/* Dropdown Panel Filter (tidak mendorong / menghalangi foto saat tertutup) */}
+        {/* Dropdown Panel Filter */}
         {hasSearchData && isSearchOpen && (
           <div className="border-t border-[#302A3A] bg-[#181520]/98 shadow-2xl backdrop-blur-xl">
             <form
@@ -698,7 +694,7 @@ function SessionDetailContent() {
               <div className="mb-3 flex items-center justify-between gap-2">
                 <p className="text-[11px] text-[#AAA1B8]">
                   Isi satu atau beberapa kolom (opsional), lalu tekan{" "}
-                  <strong className="text-white">Cari</strong>.
+                  <strong className="text-white">Cari Foto</strong>.
                 </p>
                 <button
                   type="button"
@@ -727,8 +723,7 @@ function SessionDetailContent() {
 
                 <label className="text-[11px] font-bold text-[#AAA1B8]">
                   Model Motor
-                  <input
-                    list="bike-model-options"
+                  <select
                     value={draftFilters.bikeModel}
                     onChange={(event) =>
                       setDraftFilters((prev) => ({
@@ -736,20 +731,20 @@ function SessionDetailContent() {
                         bikeModel: event.target.value,
                       }))
                     }
-                    placeholder="Contoh: Vario / NMAX"
-                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none placeholder:text-[#675F73] focus:border-[#7B4FE0]"
-                  />
-                  <datalist id="bike-model-options">
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none focus:border-[#7B4FE0]"
+                  >
+                    <option value="">Semua Model Motor</option>
                     {uniqueFilterOptions.bikeModels.map((value) => (
-                      <option key={value} value={value} />
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
                     ))}
-                  </datalist>
+                  </select>
                 </label>
 
                 <label className="text-[11px] font-bold text-[#AAA1B8]">
                   Warna Motor
-                  <input
-                    list="bike-color-options"
+                  <select
                     value={draftFilters.bikeColor}
                     onChange={(event) =>
                       setDraftFilters((prev) => ({
@@ -757,20 +752,20 @@ function SessionDetailContent() {
                         bikeColor: event.target.value,
                       }))
                     }
-                    placeholder="Contoh: Hitam"
-                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none placeholder:text-[#675F73] focus:border-[#7B4FE0]"
-                  />
-                  <datalist id="bike-color-options">
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none focus:border-[#7B4FE0]"
+                  >
+                    <option value="">Semua Warna Motor</option>
                     {uniqueFilterOptions.bikeColors.map((value) => (
-                      <option key={value} value={value} />
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
                     ))}
-                  </datalist>
+                  </select>
                 </label>
 
                 <label className="text-[11px] font-bold text-[#AAA1B8]">
                   Warna Jaket
-                  <input
-                    list="jacket-color-options"
+                  <select
                     value={draftFilters.jacketColor}
                     onChange={(event) =>
                       setDraftFilters((prev) => ({
@@ -778,14 +773,15 @@ function SessionDetailContent() {
                         jacketColor: event.target.value,
                       }))
                     }
-                    placeholder="Contoh: Putih"
-                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none placeholder:text-[#675F73] focus:border-[#7B4FE0]"
-                  />
-                  <datalist id="jacket-color-options">
+                    className="mt-1.5 w-full rounded-lg border border-[#302A3A] bg-[#100E17] px-3 py-2 text-xs text-white outline-none focus:border-[#7B4FE0]"
+                  >
+                    <option value="">Semua Warna Jaket</option>
                     {uniqueFilterOptions.jacketColors.map((value) => (
-                      <option key={value} value={value} />
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
                     ))}
-                  </datalist>
+                  </select>
                 </label>
 
                 <label className="text-[11px] font-bold text-[#AAA1B8]">
@@ -838,6 +834,39 @@ function SessionDetailContent() {
           </div>
         )}
       </header>
+
+      {/* Alert / Banner Info jika sesi punya data metadata motor */}
+      {hasSearchData && showSearchBanner && activeFilterCount === 0 && !isSearchOpen && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[#7B4FE0]/40 bg-[#7B4FE0]/10 px-3.5 py-2.5 text-xs shadow-md">
+          <div className="flex items-center gap-2 text-[#D9CBFF]">
+            <span className="text-base">🏍️</span>
+            <span>
+              <strong className="text-white">Kamu bisa cari motor kamu di sini!</strong>{" "}
+              <span className="hidden sm:inline text-[#AAA1B8]">
+                Cari cepat berdasarkan plat nomor, jenis motor, warna, atau jam lewat.
+              </span>
+            </span>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              className="rounded-lg bg-[#7B4FE0] px-3 py-1.5 text-[11px] font-bold text-white shadow-md shadow-[#7B4FE0]/25 transition hover:bg-[#683ec9]"
+            >
+              Cari Sekarang
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSearchBanner(false)}
+              className="p-1 text-[#AAA1B8] hover:text-white"
+              aria-label="Tutup pemberitahuan"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bar Info Ringkas saat filter sedang aktif */}
       {hasSearchData && activeFilterCount > 0 && (
@@ -901,8 +930,8 @@ function SessionDetailContent() {
         </div>
       )}
 
-      {/* Subfolders Jam EXIF (Presisi Single Line, Anti-Wrap Kebawah) */}
-      {driveFolders.length > 0 && activeFilterCount === 0 && (
+      {/* Subfolders Jam EXIF (Tetap muncul di atas meskipun sedang filter) */}
+      {driveFolders.length > 0 && (
         <section className="mb-6 space-y-2">
           <h2 className="text-xs sm:text-sm font-bold text-[#AAA1B8]">
             PILIH SUB-FOLDER JAM EXIF:
