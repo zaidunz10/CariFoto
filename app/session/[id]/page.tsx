@@ -85,6 +85,14 @@ function SessionDetailContent() {
     active: false,
     failed: 0,
   });
+  const [downloadingSingleId, setDownloadingSingleId] = useState<string | null>(
+    null,
+  );
+  const [downloadAlert, setDownloadAlert] = useState<{
+    type: "loading" | "success" | "error";
+    message: string;
+  } | null>(null);
+
   const params = useParams();
   const router = useRouter();
   const sessionId = params.id;
@@ -360,15 +368,41 @@ function SessionDetailContent() {
   }
 
   async function handleDownloadPhoto(fileId: string) {
-    const photo = displayedPhotos.find((item) => item.id === fileId);
+    if (downloadingSingleId) return;
+
+    const photo =
+      displayedPhotos.find((item) => item.id === fileId) ||
+      (selectedPhoto?.id === fileId ? selectedPhoto : null);
 
     if (!photo) return;
 
     try {
+      setDownloadingSingleId(fileId);
+      setDownloadAlert({
+        type: "loading",
+        message: `Sedang mengunduh ${photo.name || "foto HD"}... Mohon tunggu sebentar.`,
+      });
+
       await downloadSinglePhoto(photo);
+
+      setDownloadAlert({
+        type: "success",
+        message: `Berhasil mengunduh ${photo.name || "foto HD"}!`,
+      });
+      window.setTimeout(() => {
+        setDownloadAlert((prev) => (prev?.type === "success" ? null : prev));
+      }, 3000);
     } catch (error) {
       console.error(error);
-      alert("Gagal mengunduh foto. Silakan coba kembali.");
+      setDownloadAlert({
+        type: "error",
+        message: "Gagal mengunduh foto. Silakan coba kembali.",
+      });
+      window.setTimeout(() => {
+        setDownloadAlert((prev) => (prev?.type === "error" ? null : prev));
+      }, 4000);
+    } finally {
+      setDownloadingSingleId(null);
     }
   }
 
@@ -388,10 +422,20 @@ function SessionDetailContent() {
       failed: 0,
     });
 
+    setDownloadAlert({
+      type: "loading",
+      message: `Sedang mengunduh 1 dari ${queue.length} foto... Mohon jangan tutup halaman.`,
+    });
+
     let failed = 0;
 
     for (let index = 0; index < queue.length; index += 1) {
       const photo = queue[index];
+
+      setDownloadAlert({
+        type: "loading",
+        message: `Sedang mengunduh ${index + 1} dari ${queue.length} foto (${photo.name})...`,
+      });
 
       try {
         await downloadSinglePhoto(photo);
@@ -415,6 +459,22 @@ function SessionDetailContent() {
       active: false,
       current: prev.total,
     }));
+
+    if (failed === 0) {
+      setDownloadAlert({
+        type: "success",
+        message: `Selesai! ${queue.length} foto berhasil diunduh.`,
+      });
+    } else {
+      setDownloadAlert({
+        type: "error",
+        message: `Selesai mengunduh, namun ${failed} dari ${queue.length} foto gagal.`,
+      });
+    }
+
+    window.setTimeout(() => {
+      setDownloadAlert(null);
+    }, 4000);
   }
 
   function openWhatsAppChat(photos: DriveItem[]) {
@@ -567,6 +627,44 @@ function SessionDetailContent() {
     <main
       className={`min-h-screen w-full bg-[#100E17] text-white px-3 sm:px-6 lg:px-8 py-3 pb-28 ${multiSelectMode ? "pt-20" : ""}`}
     >
+      {/* Floating Alert Status Download (Tampil di atas modal maupun halaman utama) */}
+      {downloadAlert && (
+        <div className="fixed left-1/2 top-4 z-[60] w-[92%] max-w-md -translate-x-1/2">
+          <div
+            className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs font-bold shadow-2xl backdrop-blur-xl sm:text-sm ${
+              downloadAlert.type === "loading"
+                ? "border-[#7B4FE0] bg-[#181520]/95 text-[#D9CBFF]"
+                : downloadAlert.type === "success"
+                  ? "border-emerald-500/60 bg-emerald-950/95 text-emerald-200"
+                  : "border-rose-500/60 bg-rose-950/95 text-rose-200"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {downloadAlert.type === "loading" && (
+                <span className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#D9CBFF] border-t-transparent" />
+              )}
+              {downloadAlert.type === "success" && (
+                <span className="shrink-0">✅</span>
+              )}
+              {downloadAlert.type === "error" && (
+                <span className="shrink-0">⚠️</span>
+              )}
+              <span>{downloadAlert.message}</span>
+            </div>
+
+            {downloadAlert.type !== "loading" && (
+              <button
+                type="button"
+                onClick={() => setDownloadAlert(null)}
+                className="shrink-0 text-white/70 hover:text-white"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Top Bar Navigation Full Width */}
       <header
         className={
@@ -1107,9 +1205,12 @@ function SessionDetailContent() {
 
                 <button
                   onClick={() => handleDownloadPhoto(selectedPhoto.id)}
-                  className="block w-full rounded-xl bg-[#7B4FE0] py-3 text-sm font-bold text-white shadow-lg shadow-[#7B4FE0]/30 transition-all hover:bg-[#683ec9] sm:text-base"
+                  disabled={downloadingSingleId === selectedPhoto.id}
+                  className="block w-full rounded-xl bg-[#7B4FE0] py-3 text-sm font-bold text-white shadow-lg shadow-[#7B4FE0]/30 transition-all hover:bg-[#683ec9] sm:text-base disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Unduh Foto HD ⬇️
+                  {downloadingSingleId === selectedPhoto.id
+                    ? "Sedang mengunduh... ⏳"
+                    : "Unduh Foto HD ⬇️"}
                 </button>
               </div>
             </div>
