@@ -1,212 +1,301 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import Link from 'next/link'
+import type { User } from "@supabase/supabase-js";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import BottomNav from "@/components/BottomNav";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { supabase } from "@/lib/supabase";
 
 export default function Profile() {
-  const [user, setUser] = useState<any>(null)
-  const [isReady, setIsReady] = useState(false)
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState<boolean>(() =>
+    Boolean(supabase),
+  );
+
+  const [infoDialog, setInfoDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+  }>({
+    open: false,
+    title: "",
+    description: "",
+  });
 
   useEffect(() => {
-    setIsReady(true)
+    const client = supabase;
+    if (!client) return;
 
-    const client = supabase
-    if (!client) {
-      setUser(null)
-      return
-    }
+    let isMounted = true;
 
-    let isMounted = true
+    client.auth
+      .getUser()
+      .then(({ data }) => {
+        if (isMounted) setUser(data.user ?? null);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingUser(false);
+      });
 
-    client.auth.getUser().then(({ data }) => {
-      if (isMounted) setUser(data.user ?? null)
-    })
-
-    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) setUser(session?.user || null)
-    })
+    const { data: authListener } = client.auth.onAuthStateChange(
+      (_event, session) => {
+        if (isMounted) {
+          setUser(session?.user || null);
+          setIsLoadingUser(false);
+        }
+      },
+    );
 
     return () => {
-      isMounted = false
-      authListener.subscription.unsubscribe()
-    }
-  }, [])
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
-  const userName = user?.user_metadata?.full_name || 'Guest'
-  const userEmail = user?.email || 'Guest@carifoto.id'
-  const photoUrl = user?.user_metadata?.avatar_url || ''
-  const initials = userName
-    .trim()
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part: string) => part[0]?.toUpperCase() || '')
-    .join('') || 'RD'
+  const userName =
+    (user?.user_metadata?.full_name as string | undefined) || "Guest";
+  const userEmail = user?.email || "Guest@carifoto.id";
+  const photoUrl =
+    (user?.user_metadata?.avatar_url as string | undefined) || "";
+  const initials =
+    userName
+      .trim()
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() || "")
+      .join("") || "RD";
 
-  const isGuest = !user || !user.id || String(user.id).startsWith('guest')
-  const purchasedCount = 0
+  const isGuest = !user || !user.id || String(user.id).startsWith("guest");
+  const purchasedCount = 0;
 
   async function handleGoogleLogin() {
     if (!supabase) {
-      alert('Supabase belum dikonfigurasi. Isi NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY.')
-      return
+      setInfoDialog({
+        open: true,
+        title: "Supabase Belum Dikonfigurasi",
+        description:
+          "Isi NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY terlebih dahulu.",
+      });
+      return;
     }
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: "google",
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=/`,
           queryParams: {
-            prompt: 'select_account',
+            prompt: "select_account",
           },
-        }
-      })
-      if (error) throw error
-    } catch (err: any) {
-      alert(`Gagal login Google: ${err.message}`)
+        },
+      });
+      if (error) throw error;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Terjadi kesalahan tidak dikenal.";
+      setInfoDialog({
+        open: true,
+        title: "Gagal Login Google",
+        description: message,
+      });
     }
   }
 
   async function handleLogout() {
     if (!supabase) {
-      alert('Supabase belum dikonfigurasi.')
-      return
+      setInfoDialog({
+        open: true,
+        title: "Supabase Belum Dikonfigurasi",
+        description: "Konfigurasi Supabase belum tersedia.",
+      });
+      return;
     }
 
-    await supabase.auth.signOut()
-    setUser(null)
-    alert('Berhasil keluar akun.')
-  }
-
-  const handleOpenHelp = () => {
-    alert('Bantuan: Pembayaran via QRIS otomatis terverifikasi & foto HD langsung bisa didownload.')
-  }
-
-  const handleOpenTerms = () => {
-    alert('Syarat: Foto dipublikasikan oleh Fotografer terverifikasi untuk komunitas Rider.')
+    await supabase.auth.signOut();
+    setUser(null);
+    setInfoDialog({
+      open: true,
+      title: "Berhasil Keluar",
+      description: "Kamu sudah keluar dari akun.",
+    });
   }
 
   return (
-    <main className="min-h-screen bg-[#F4F7FB] text-[#1E293B] px-4 sm:px-8 lg:px-12 py-6 w-full pb-28">
-      {!isReady ? (
+    <main className="min-h-screen w-full bg-[#100E17] px-4 py-6 pb-28 text-white sm:px-8 lg:px-12">
+      {isLoadingUser ? (
         <div className="mx-auto flex min-h-screen max-w-5xl items-center justify-center">
-          <div className="w-full max-w-md rounded-2xl border border-[#E2E8F0] bg-white p-6 text-center text-sm text-[#64748B] shadow-sm">
+          <div className="w-full max-w-md rounded-2xl border border-[#302A3A] bg-[#181520] p-6 text-center text-sm text-[#AAA1B8] shadow-xl">
             Memuat profil...
           </div>
         </div>
       ) : (
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col items-center pt-2">
-          <header className="flex w-full max-w-5xl items-center justify-between pb-4">
-            <div className="flex items-center gap-2 text-[#1E293B]">
-              <button
-                onClick={() => window.history.back()}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-xl text-[#1E293B]"
-                aria-label="Kembali"
-              >
-                ←
-              </button>
-            </div>
-            <h1 className="text-xl font-bold text-[#1E293B]">Profil Rider</h1>
+          <header className="flex w-full max-w-5xl items-center justify-between border-b border-[#302A3A] pb-4">
+            <button
+              type="button"
+              onClick={() => {
+                if (window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push("/");
+                }
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#302A3A] bg-[#181520] text-lg text-white transition hover:border-[#7B4FE0]"
+              aria-label="Kembali"
+            >
+              ←
+            </button>
+            <h1 className="text-xl font-bold text-white">Profil Rider</h1>
             <div className="w-9" />
           </header>
 
-          <div className="flex w-full max-w-md flex-col items-center pt-2">
-            <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#D6C7FF] shadow-lg shadow-[#7B4FE0]/20">
+          <div className="mt-6 flex w-full max-w-md flex-col items-center">
+            <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-[#302A3A] bg-[#23143D] shadow-lg shadow-[#7B4FE0]/25">
               {photoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={photoUrl} alt="Profile Photo" className="h-full w-full object-cover" />
+                <img
+                  src={photoUrl}
+                  alt="Foto Profil"
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                <span className="text-3xl font-bold text-[#23143D]">{initials}</span>
+                <span className="text-3xl font-bold text-[#D9CBFF]">
+                  {initials}
+                </span>
               )}
             </div>
 
-            <h2 className="mt-4 text-[20px] font-bold text-[#1E293B]">{userName}</h2>
+            <h2 className="mt-4 text-xl font-bold text-white">{userName}</h2>
 
-            <div className="mt-2 rounded-full bg-[#E8F2FF] px-3 py-1 text-[12px] font-medium text-[#7B4FE0]">
+            <div className="mt-2 rounded-full border border-[#7B4FE0]/40 bg-[#7B4FE0]/15 px-3 py-1 text-xs font-medium text-[#D9CBFF]">
               {userEmail}
             </div>
 
-            <div className="mt-6 w-full rounded-[20px] bg-white p-4 shadow-sm ring-1 ring-[#E2E8F0]">
+            <div className="mt-6 w-full rounded-2xl border border-[#302A3A] bg-[#181520] p-4 shadow-xl">
               <div className="flex items-center justify-around">
                 <div className="text-center">
-                  <div className="text-[18px] font-bold text-[#7B4FE0]">{purchasedCount}</div>
-                  <div className="text-[11px] text-[#64748B]">Foto Koleksi Dibeli</div>
+                  <div className="text-lg font-bold text-[#7B4FE0]">
+                    {purchasedCount}
+                  </div>
+                  <div className="text-[11px] text-[#AAA1B8]">
+                    Foto Koleksi Dibeli
+                  </div>
                 </div>
 
-                <div className="h-9 w-px bg-[#E2E8F0]" />
+                <div className="h-9 w-px bg-[#302A3A]" />
 
                 <div className="text-center">
-                  <div className={`text-[18px] font-bold ${isGuest ? 'text-[#7B4FE0]' : 'text-[#22C55E]'}`}>
-                    {isGuest ? 'Mode Tamu' : 'Aktif'}
+                  <div
+                    className={`text-lg font-bold ${isGuest ? "text-[#D9CBFF]" : "text-emerald-400"}`}
+                  >
+                    {isGuest ? "Mode Tamu" : "Aktif"}
                   </div>
-                  <div className="text-[11px] text-[#64748B]">Status Akun</div>
+                  <div className="text-[11px] text-[#AAA1B8]">Status Akun</div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-5 w-full rounded-[20px] bg-white p-2 shadow-sm ring-1 ring-[#E2E8F0]">
-              <button
-                onClick={() => (window.location.href = '/orders')}
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-[#F8FAFC]"
+            <div className="mt-5 w-full rounded-2xl border border-[#302A3A] bg-[#181520] p-2 shadow-xl">
+              <Link
+                href="/orders"
+                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-[#100E17]"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F1F5F9] text-[#7B4FE0]">🛒</div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#100E17] text-[#7B4FE0]">
+                    🛒
+                  </div>
                   <div>
-                    <div className="text-sm font-bold text-[#1E293B]">Pesanan Saya</div>
-                    <div className="text-[11px] text-[#64748B]">Lihat foto jepretan yang sudah dibeli</div>
+                    <div className="text-sm font-bold text-white">
+                      Pesanan Saya
+                    </div>
+                    <div className="text-[11px] text-[#AAA1B8]">
+                      Lihat foto jepretan yang sudah dibeli
+                    </div>
                   </div>
                 </div>
-                <span className="text-lg text-[#94A3B8]">›</span>
+                <span className="text-lg text-[#AAA1B8]">›</span>
+              </Link>
+
+              <div className="mx-4 border-t border-[#302A3A]" />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setInfoDialog({
+                    open: true,
+                    title: "Pusat Bantuan & FAQ",
+                    description:
+                      "Kamu dapat mencari foto lewat plat nomor, lokasi, tanggal, atau filter model motor & jaket. Setelah menemukan foto, kamu bisa langsung unduh foto HD atau hubungi fotografer lewat WhatsApp.",
+                  })
+                }
+                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-[#100E17]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#100E17] text-[#7B4FE0]">
+                    ℹ️
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-white">
+                      Pusat Bantuan &amp; FAQ
+                    </div>
+                    <div className="text-[11px] text-[#AAA1B8]">
+                      Cara cari foto, hubungi fotografer &amp; download HD
+                    </div>
+                  </div>
+                </div>
+                <span className="text-lg text-[#AAA1B8]">›</span>
               </button>
 
-              <div className="mx-4 border-t border-[#F1F5F9]" />
+              <div className="mx-4 border-t border-[#302A3A]" />
 
               <button
-                onClick={handleOpenHelp}
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-[#F8FAFC]"
+                type="button"
+                onClick={() =>
+                  setInfoDialog({
+                    open: true,
+                    title: "Syarat & Ketentuan Rider",
+                    description:
+                      "Foto yang tampil di CariFoto dipublikasikan oleh fotografer komunitas untuk rider. Harap hormati hak cipta fotografer sesuai ketentuan masing-masing sesi.",
+                  })
+                }
+                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-[#100E17]"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F1F5F9] text-[#7B4FE0]">ℹ️</div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#100E17] text-[#7B4FE0]">
+                    🔒
+                  </div>
                   <div>
-                    <div className="text-sm font-bold text-[#1E293B]">Pusat Bantuan & FAQ</div>
-                    <div className="text-[11px] text-[#64748B]">Cara cari foto, bayar QRIS & download HD</div>
+                    <div className="text-sm font-bold text-white">
+                      Syarat &amp; Ketentuan Rider
+                    </div>
+                    <div className="text-[11px] text-[#AAA1B8]">
+                      Kebijakan privasi &amp; hak cipta foto
+                    </div>
                   </div>
                 </div>
-                <span className="text-lg text-[#94A3B8]">›</span>
-              </button>
-
-              <div className="mx-4 border-t border-[#F1F5F9]" />
-
-              <button
-                onClick={handleOpenTerms}
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-[#F8FAFC]"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F1F5F9] text-[#7B4FE0]">🔒</div>
-                  <div>
-                    <div className="text-sm font-bold text-[#1E293B]">Syarat & Ketentuan Rider</div>
-                    <div className="text-[11px] text-[#64748B]">Kebijakan privasi & hak cipta foto</div>
-                  </div>
-                </div>
-                <span className="text-lg text-[#94A3B8]">›</span>
+                <span className="text-lg text-[#AAA1B8]">›</span>
               </button>
             </div>
 
             <div className="mt-7 w-full">
               {isGuest ? (
                 <button
+                  type="button"
                   onClick={handleGoogleLogin}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#7B4FE0] text-base font-bold text-white shadow-lg shadow-[#7B4FE0]/25"
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#7B4FE0] text-base font-bold text-white shadow-lg shadow-[#7B4FE0]/25 transition hover:bg-[#683ec9]"
                 >
                   <span>🔐</span>
                   <span>Masuk dengan Google</span>
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={handleLogout}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#EF4444] text-base font-bold text-white"
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 text-base font-bold text-white transition hover:bg-rose-500"
                 >
                   <span>↩</span>
                   <span>Keluar Akun</span>
@@ -217,24 +306,17 @@ export default function Profile() {
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#23143D]/95 backdrop-blur-md border-t border-[#302A3A] py-2 px-4">
-        <div className="mx-auto flex max-w-md items-center justify-around">
-          <Link href="/" className="flex flex-col items-center gap-1 rounded-xl px-4 py-1.5 text-xs font-bold text-[#9E8DBE] transition-all hover:text-white">
-            <span className="text-base">🏠</span>
-            <span>Cari Foto</span>
-          </Link>
+      <BottomNav active="profile" />
 
-          <Link href="/orders" className="flex flex-col items-center gap-1 rounded-xl px-4 py-1.5 text-xs font-bold text-[#9E8DBE] transition-all hover:text-white">
-            <span className="text-base">🛒</span>
-            <span>Pesanan</span>
-          </Link>
-
-          <Link href="/profile" className="flex flex-col items-center gap-1 rounded-xl bg-[#7B4FE0] px-4 py-1.5 text-xs font-bold text-white shadow-lg shadow-[#7B4FE0]/30">
-            <span className="text-base">👤</span>
-            <span>Profil</span>
-          </Link>
-        </div>
-      </nav>
+      <ConfirmDialog
+        open={infoDialog.open}
+        title={infoDialog.title}
+        description={infoDialog.description}
+        confirmLabel="Tutup"
+        hideCancel
+        onConfirm={() => {}}
+        onClose={() => setInfoDialog((prev) => ({ ...prev, open: false }))}
+      />
     </main>
-  )
+  );
 }

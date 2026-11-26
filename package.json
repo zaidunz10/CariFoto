@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsc --outDir .next/test-dist --module commonjs --moduleResolution node --target ES2020 --esModuleInterop --skipLibCheck tests/helpers.test.ts && node --test .next/test-dist/tests/helpers.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

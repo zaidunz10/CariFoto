@@ -1,4 +1,4 @@
-export function normalizeWhatsAppNumber(value?: string) {
+export function normalizeWhatsAppNumber(value?: string | null) {
   if (!value) return "";
 
   const cleaned = value.replace(/\D/g, "");
@@ -9,7 +9,7 @@ export function normalizeWhatsAppNumber(value?: string) {
   return cleaned;
 }
 
-function formatSessionDayDate(dateStr?: string) {
+export function formatSessionDayDate(dateStr?: string | null) {
   if (!dateStr) return "";
 
   const value = dateStr.slice(0, 10);
@@ -33,9 +33,9 @@ export function buildWhatsAppMessage({
   currentSubfolder,
   photos,
 }: {
-  sessionLocation?: string;
-  sessionDate?: string;
-  instagramLink?: string;
+  sessionLocation?: string | null;
+  sessionDate?: string | null;
+  instagramLink?: string | null;
   currentSubfolder?: string;
   photos: Array<{ id: string; webViewLink?: string; name?: string }>;
 }) {
